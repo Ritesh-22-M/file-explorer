@@ -1,0 +1,13 @@
+# Build artifacts
+file-explorer
+*.o
+*.exe
+
+# OS
+.DS_Store
+thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*~
