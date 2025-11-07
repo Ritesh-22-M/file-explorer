@@ -8,6 +8,28 @@
 
 namespace fs = std::filesystem;
 
+// ---------- ANSI color definitions ----------
+#define RESET   "\033[0m"
+#define BOLD    "\033[1m"
+#define RED     "\033[31m"
+#define GREEN   "\033[32m"
+#define YELLOW  "\033[33m"
+#define BLUE    "\033[34m"
+#define MAGENTA "\033[35m"
+#define CYAN    "\033[36m"
+#define WHITE   "\033[37m"
+
+// Helper: check if file is executable
+static bool is_executable(const std::filesystem::path &p) {
+    std::error_code ec;
+    auto perms = std::filesystem::status(p, ec).permissions();
+    if (ec) return false;
+    if ((perms & fs::perms::owner_exec) != fs::perms::none) return true;
+    if ((perms & fs::perms::group_exec) != fs::perms::none) return true;
+    if ((perms & fs::perms::others_exec) != fs::perms::none) return true;
+    return false;
+}
+
 Explorer::Explorer() {
     cwd = fs::current_path().string();
 }
@@ -20,7 +42,6 @@ std::vector<std::string> Explorer::split(const std::string& s) {
         tokens.push_back(t);
     }
     if (tokens.empty()) {
-        // fallback: split by spaces if quoted extraction gave nothing
         std::istringstream iss2(s);
         while (iss2 >> t) tokens.push_back(t);
     }
@@ -30,7 +51,7 @@ std::vector<std::string> Explorer::split(const std::string& s) {
 void Explorer::run() {
     std::string line;
     while (true) {
-        std::cout << "[fe] " << cwd << " $ ";
+        std::cout << BOLD << CYAN << "[fe]" << RESET << " " << cwd << " $ ";
         if (!std::getline(std::cin, line)) break;
         auto parts = split(line);
         if (parts.empty()) continue;
@@ -51,7 +72,7 @@ void Explorer::run() {
         else if (cmd == "help") cmd_help(parts);
         else if (cmd == "clear") cmd_clear(parts);
         else if (cmd == "exit" || cmd == "quit") break;
-        else std::cout << "Unknown command: " << cmd << " (type 'help')\n";
+        else std::cout << RED << "Unknown command: " << cmd << " (type 'help')" << RESET << "\n";
     }
 }
 
@@ -66,6 +87,7 @@ void Explorer::ls_path(const std::string& path, bool show_hidden) {
             if (fs::is_directory(st)) std::cout << "d ";
             else if (fs::is_symlink(st)) std::cout << "l ";
             else std::cout << "- ";
+
             auto ftime = fs::last_write_time(entry.path());
             auto sctp = std::chrono::time_point_cast<std::chrono::system_clock::duration>(
                 ftime - fs::file_time_type::clock::now()
@@ -74,10 +96,23 @@ void Explorer::ls_path(const std::string& path, bool show_hidden) {
             std::time_t cftime = std::chrono::system_clock::to_time_t(sctp);
             std::cout << std::put_time(std::localtime(&cftime), "%F %T") << " ";
             print_permissions(st.permissions());
-            std::cout << " " << name << "\n";
+            std::cout << " ";
+
+            if (fs::is_directory(entry.path()))
+                std::cout << BLUE << BOLD << name << RESET;
+            else if (fs::is_symlink(entry.path()))
+                std::cout << CYAN << name << RESET;
+            else if (is_executable(entry.path()))
+                std::cout << GREEN << name << RESET;
+            else if (!name.empty() && name[0]=='.')
+                std::cout << MAGENTA << name << RESET;
+            else
+                std::cout << name;
+
+            std::cout << "\n";
         }
     } catch (std::exception &e) {
-        std::cout << "ls error: " << e.what() << "\n";
+        std::cout << RED << "ls error: " << e.what() << RESET << "\n";
     }
 }
 
@@ -89,7 +124,7 @@ void Explorer::cmd_ls(const std::vector<std::string>& args) {
         else target = a;
     }
     if (!fs::exists(target)) {
-        std::cout << "ls: path does not exist: " << target << "\n";
+        std::cout << RED << "ls: path does not exist: " << target << RESET << "\n";
         return;
     }
     ls_path(target, show_hidden);
@@ -104,12 +139,12 @@ void Explorer::cmd_cd(const std::vector<std::string>& args) {
     if (!p.is_absolute()) p = fs::path(cwd) / p;
     try {
         if (!fs::exists(p) || !fs::is_directory(p)) {
-            std::cout << "cd: not a directory: " << p << "\n";
+            std::cout << RED << "cd: not a directory: " << p << RESET << "\n";
             return;
         }
         cwd = fs::canonical(p).string();
     } catch (std::exception &e) {
-        std::cout << "cd error: " << e.what() << "\n";
+        std::cout << RED << "cd error: " << e.what() << RESET << "\n";
     }
 }
 
@@ -122,9 +157,8 @@ bool Explorer::copy_recursive(const std::string& src, const std::string& dst) {
         fs::path s(src), d(dst);
         if (!s.is_absolute()) s = fs::path(cwd) / s;
         if (!d.is_absolute()) d = fs::path(cwd) / d;
-
         if (!fs::exists(s)) {
-            std::cout << "cp: source does not exist: " << s << "\n";
+            std::cout << RED << "cp: source does not exist: " << s << RESET << "\n";
             return false;
         }
         if (fs::is_directory(s)) {
@@ -141,7 +175,7 @@ bool Explorer::copy_recursive(const std::string& src, const std::string& dst) {
         }
         return true;
     } catch (std::exception &e) {
-        std::cout << "cp error: " << e.what() << "\n";
+        std::cout << RED << "cp error: " << e.what() << RESET << "\n";
         return false;
     }
 }
@@ -152,7 +186,7 @@ void Explorer::cmd_cp(const std::vector<std::string>& args) {
         return;
     }
     std::string src = args[0], dst = args[1];
-    if (copy_recursive(src, dst)) std::cout << "Copied.\n";
+    if (copy_recursive(src, dst)) std::cout << GREEN << "Copied." << RESET << "\n";
 }
 
 void Explorer::cmd_mv(const std::vector<std::string>& args) {
@@ -166,9 +200,9 @@ void Explorer::cmd_mv(const std::vector<std::string>& args) {
     try {
         fs::create_directories(d.parent_path());
         fs::rename(s, d);
-        std::cout << "Moved.\n";
+        std::cout << GREEN << "Moved." << RESET << "\n";
     } catch (std::exception &e) {
-        std::cout << "mv error: " << e.what() << "\n";
+        std::cout << RED << "mv error: " << e.what() << RESET << "\n";
     }
 }
 
@@ -191,18 +225,18 @@ void Explorer::cmd_rm(const std::vector<std::string>& args) {
     if (!p.is_absolute()) p = fs::path(cwd) / p;
     try {
         if (fs::is_directory(p) && !recursive) {
-            std::cout << "rm: " << p << " is a directory (use -r)\n";
+            std::cout << YELLOW << "rm: " << p << " is a directory (use -r)" << RESET << "\n";
             return;
         }
         if (recursive) {
             fs::remove_all(p);
-            std::cout << "Removed recursively.\n";
+            std::cout << GREEN << "Removed recursively." << RESET << "\n";
         } else {
             fs::remove(p);
-            std::cout << "Removed.\n";
+            std::cout << GREEN << "Removed." << RESET << "\n";
         }
     } catch (std::exception &e) {
-        std::cout << "rm error: " << e.what() << "\n";
+        std::cout << RED << "rm error: " << e.what() << RESET << "\n";
     }
 }
 
@@ -215,9 +249,9 @@ void Explorer::cmd_mkdir(const std::vector<std::string>& args) {
     if (!p.is_absolute()) p = fs::path(cwd) / p;
     try {
         fs::create_directories(p);
-        std::cout << "Directory created: " << p << "\n";
+        std::cout << GREEN << "Directory created: " << RESET << p << "\n";
     } catch (std::exception &e) {
-        std::cout << "mkdir error: " << e.what() << "\n";
+        std::cout << RED << "mkdir error: " << e.what() << RESET << "\n";
     }
 }
 
@@ -233,9 +267,9 @@ void Explorer::cmd_touch(const std::vector<std::string>& args) {
         ofs.close();
         auto now = std::filesystem::file_time_type::clock::now();
         fs::last_write_time(p, now);
-        std::cout << "Touched: " << p << "\n";
+        std::cout << GREEN << "Touched: " << RESET << p << "\n";
     } catch (std::exception &e) {
-        std::cout << "touch error: " << e.what() << "\n";
+        std::cout << RED << "touch error: " << e.what() << RESET << "\n";
     }
 }
 
@@ -249,9 +283,9 @@ void Explorer::cmd_chmod(const std::vector<std::string>& args) {
         fs::path p = args[1];
         if (!p.is_absolute()) p = fs::path(cwd) / p;
         fs::permissions(p, static_cast<fs::perms>(mode), fs::perm_options::replace);
-        std::cout << "Permissions changed.\n";
+        std::cout << GREEN << "Permissions changed." << RESET << "\n";
     } catch (std::exception &e) {
-        std::cout << "chmod error: " << e.what() << "\n";
+        std::cout << RED << "chmod error: " << e.what() << RESET << "\n";
     }
 }
 
@@ -267,11 +301,11 @@ void Explorer::cmd_search(const std::vector<std::string>& args) {
     try {
         for (auto &p : fs::recursive_directory_iterator(start)) {
             if (p.path().filename().string().find(pattern) != std::string::npos) {
-                std::cout << p.path().string() << "\n";
+                std::cout << CYAN << p.path().string() << RESET << "\n";
             }
         }
     } catch (std::exception &e) {
-        std::cout << "search error: " << e.what() << "\n";
+        std::cout << RED << "search error: " << e.what() << RESET << "\n";
     }
 }
 
@@ -283,7 +317,7 @@ void Explorer::cmd_info(const std::vector<std::string>& args) {
     fs::path p = args[0];
     if (!p.is_absolute()) p = fs::path(cwd) / p;
     try {
-        if (!fs::exists(p)) { std::cout << "info: does not exist\n"; return; }
+        if (!fs::exists(p)) { std::cout << RED << "info: does not exist" << RESET << "\n"; return; }
         auto st = fs::status(p);
         std::cout << "Path: " << fs::absolute(p) << "\n";
         std::cout << "Size: " << (fs::is_regular_file(p) ? fs::file_size(p) : 0) << "\n";
@@ -300,12 +334,11 @@ void Explorer::cmd_info(const std::vector<std::string>& args) {
         print_permissions(st.permissions());
         std::cout << "\n";
     } catch (std::exception &e) {
-        std::cout << "info error: " << e.what() << "\n";
+        std::cout << RED << "info error: " << e.what() << RESET << "\n";
     }
 }
 
 void Explorer::print_permissions(const fs::perms p) {
-    // owner, group, others r/w/x
     std::cout << ((p & fs::perms::owner_read) != fs::perms::none ? 'r' : '-')
               << ((p & fs::perms::owner_write) != fs::perms::none ? 'w' : '-')
               << ((p & fs::perms::owner_exec) != fs::perms::none ? 'x' : '-')
@@ -314,26 +347,26 @@ void Explorer::print_permissions(const fs::perms p) {
               << ((p & fs::perms::group_exec) != fs::perms::none ? 'x' : '-')
               << ((p & fs::perms::others_read) != fs::perms::none ? 'r' : '-')
               << ((p & fs::perms::others_write) != fs::perms::none ? 'w' : '-')
-              << ((p & fs::perms::others_exec) != fs::perms::none ? 'x' : '-') ;
+              << ((p & fs::perms::others_exec) != fs::perms::none ? 'x' : '-');
 }
 
 void Explorer::cmd_help(const std::vector<std::string>&) {
     std::cout <<
-    "Commands:\n"
-    "  ls [-a] [path]        List directory\n"
-    "  cd [path]             Change directory\n"
-    "  pwd                   Print working directory\n"
-    "  cp <src> <dst>        Copy file or directory (recursive)\n"
-    "  mv <src> <dst>        Move/rename\n"
-    "  rm <path> [-r]        Remove file or dir (use -r for dir)\n"
-    "  mkdir <dirname>       Create directory\n"
-    "  touch <file>          Create or update file timestamp\n"
-    "  chmod <octal> <file>  Set permissions (octal, e.g. 755)\n"
-    "  search <pattern> [path]  Search recursively for filenames containing pattern\n"
-    "  info <file>           Show file info (size, type, mtime, perms)\n"
-    "  clear                 Clear the screen\n"
-    "  help                  Show this help\n"
-    "  exit, quit            Exit explorer\n";
+    BLUE "Commands:" RESET "\n"
+    GREEN "  ls [-a] [path]        " RESET "List directory\n"
+    GREEN "  cd [path]             " RESET "Change directory\n"
+    GREEN "  pwd                   " RESET "Print working directory\n"
+    GREEN "  cp <src> <dst>        " RESET "Copy file or directory (recursive)\n"
+    GREEN "  mv <src> <dst>        " RESET "Move/rename\n"
+    GREEN "  rm <path> [-r]        " RESET "Remove file or dir (use -r for dir)\n"
+    GREEN "  mkdir <dirname>       " RESET "Create directory\n"
+    GREEN "  touch <file>          " RESET "Create or update file timestamp\n"
+    GREEN "  chmod <octal> <file>  " RESET "Set permissions (octal, e.g., 755)\n"
+    GREEN "  search <pattern> [path]" RESET " Search recursively for filenames containing pattern\n"
+    GREEN "  info <file>           " RESET "Show file info (size, type, mtime, perms)\n"
+    GREEN "  clear                 " RESET "Clear the screen\n"
+    GREEN "  help                  " RESET "Show this help\n"
+    GREEN "  exit, quit            " RESET "Exit explorer\n";
 }
 
 void Explorer::cmd_clear(const std::vector<std::string>&) {
