@@ -30,18 +30,22 @@ Clone or download this repository, then open a terminal in the project root fold
 
 ```bash
 make
+```
+
 This will compile and create an executable file named: file-explorer
 
 To clean build artifacts:
 
 ```bash
 make clean
+```
 
 ▶️ Run the Application
 Run the explorer from your terminal:
 
 ```bash
 ./file-explorer
+```
 
 You’ll see:
 
@@ -49,6 +53,7 @@ You’ll see:
 Console File Explorer (C++ / Linux)
 Type 'help' for commands.
 [fe] /home/ritesh $
+```
 💡 Example Usage
 ```bash
 [fe] /home/ritesh $ ls
@@ -60,6 +65,7 @@ Type 'help' for commands.
 [fe] /home/ritesh/test $ cd ..
 [fe] /home/ritesh $ rm test -r
 [fe] /home/ritesh $ exit
+```
 
 🧱 Project Structure :
 src/
