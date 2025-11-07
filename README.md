@@ -68,6 +68,7 @@ Type 'help' for commands.
 ```
 
 🧱 Project Structure :
+```
 src/
   main.cpp
   explorer.hpp
@@ -78,6 +79,7 @@ README.md
 LICENSE
 📄 License
 This project is licensed under the MIT License — see the LICENSE file for details.
+```
 
 👨‍💻 Author
 Ritesh Kumar
