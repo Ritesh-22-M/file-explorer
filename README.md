@@ -81,7 +81,9 @@ LICENSE
 This project is licensed under the MIT License — see the LICENSE file for details.
 ```
 
+```
 👨‍💻 Author
-Ritesh Kumar
+Ritesh Mohanty
 Capstone Project - Linux System Programming
 https://github.com/Ritesh-22-M/file-explorer
+```
